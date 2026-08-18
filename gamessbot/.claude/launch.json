@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gamessbot-gui",
+      "runtimeExecutable": "/home/srr/BOT/gamessbot/venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "gamessbot.webapp:app", "--host", "127.0.0.1", "--port", "8768"],
+      "port": 8768
+    }
+  ]
+}

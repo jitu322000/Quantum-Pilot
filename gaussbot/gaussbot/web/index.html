@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GaussBot</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1><span class="logo-mark" aria-hidden="true"></span>Gauss<span class="accent-word">Bot</span></h1>
+  <p class="subtitle">From a guess geometry to a verified reaction barrier — automatically, locally.</p>
+  <button type="button" id="tips-btn" class="small-btn tips-btn">Tips</button>
+</header>
+
+<div id="tips-panel" class="hidden">
+  <h2>Common mistakes &amp; best practices</h2>
+  <ul>
+    <li>Start from the best geometry you actually have. A SMILES-embedded guess is a reasonable fallback, but a real 3D structure (from an X-ray structure, a previous calculation, or careful manual building) converges faster and more reliably than relying on PM6 pre-optimization to fix a bad guess.</li>
+    <li>For GenECP: make sure every heavy atom/transition metal is explicitly assigned an ECP, anything left unchecked falls through to the "light" basis, which is usually wrong for those elements and can fail silently rather than erroring.</li>
+    <li>If the IRC doesn't clearly connect to both the reactant and product, don't assume the TS is wrong, try increasing the number of points per direction first. A path that just hasn't finished relaxing looks identical to a genuinely wrong TS in this check.</li>
+    <li>Double-check charge and multiplicity by hand for radicals, ions, or anything not a neutral closed-shell singlet, automatic detection from a SMILES or file can get this wrong, and a wrong multiplicity silently produces a wrong (but real-looking) answer.</li>
+    <li>Supply your own TS guess for anything beyond the simplest reactions. The auto-generated guess is a crude linear interpolation between reactant and product, fine for simple isomerizations, unreliable for anything with major bond reorganization.</li>
+    <li>Right-size %nprocshared/%mem to the actual system, more isn't free, and over-requesting resources you don't have can make a job fail or queue rather than run faster.</li>
+    <li>The two extra reactant/product cross-checks (TS-mode distortion, IRC-endpoint reoptimization) are most useful when you're not fully sure the TS connects the right minima, they cost extra compute, so they're worth enabling especially for anything novel or unusual, less so for a well-understood reaction you've already verified before.</li>
+    <li>If an optimization keeps failing to converge, check the "max repair attempts" setting, a geometry genuinely close to converging (most criteria already met) often just needs more attempts, not a different starting point.</li>
+  </ul>
+</div>
+
+<main>
+  <form id="job-form">
+    <section>
+      <div class="section-header-row">
+        <h2>1. What do you want to do?</h2>
+        <button type="button" id="pbs-toggle-btn" class="pbs-btn">Enable PBS submission</button>
+      </div>
+      <div class="radio-group">
+        <label><input type="radio" name="study_type" value="mechanism" checked> Reaction mechanism study (reactant + product + TS)</label>
+        <label><input type="radio" name="study_type" value="single"> Single geometry optimization</label>
+        <label><input type="radio" name="study_type" value="ts_search"> Transition state search (TS only)</label>
+      </div>
+      <div class="pbs-warning hidden" id="pbs-warning">
+        <p class="hint">&#9888; PBS mode is ON for this session, every study submitted from now on is queued via <code>qsub</code> instead of run directly (needs <code>qsub</code>/<code>qstat</code>/<code>qdel</code> on PATH). Click "Edit" below to change the script for your own cluster's paths/resources before running anything for real, keep <code>__JOB__</code> exactly as it appears (in two places); it's automatically replaced with each job's actual name at submission time. Click the PBS button above again to go back to running locally.</p>
+        <div class="pbs-script-header">
+          <label>PBS script (used for every submission this session)</label>
+          <div class="pbs-script-actions">
+            <button type="button" id="pbs-edit-btn" class="pbs-script-btn">&#9998; Edit</button>
+            <button type="button" id="pbs-save-btn" class="pbs-script-btn hidden">&#10003; Save</button>
+          </div>
+        </div>
+        <textarea id="pbs-script-textarea" class="pbs-script-textarea" spellcheck="false" rows="14" readonly></textarea>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Structures</h2>
+      <div class="field">
+        <label><span id="reactant-label">Reactant file</span> <span class="format-hint">(.com, .xyz, .mol, .sdf, .pdb, .cdx, .cdxml, .log, auto-converted to a Gaussian input)</span></label>
+        <input type="file" id="reactant-file" accept=".com,.xyz,.mol,.sdf,.pdb,.cdx,.cdxml,.log">
+        <div class="or-row">or SMILES:
+          <input type="text" id="reactant-smiles" placeholder="e.g. C=CO">
+          <button type="button" class="load-btn" id="reactant-smiles-load">Load</button>
+        </div>
+        <div class="file-info" id="reactant-info"></div>
+        <p class="hint ts-search-warning hidden" id="reactant-log-warning">Not a .log file, this section doesn't PM6-preopt or reoptimize the reactant/product, so make sure this is already a good/optimized geometry, or the TS search may not find the transition state you're looking for.</p>
+        <div class="describe-row">
+          <label class="describe-label">Optional: describe this compound/reaction (AI-assisted geometry)</label>
+          <textarea id="reactant-description" rows="2" placeholder="e.g. vinyl alcohol, the enol tautomer of acetaldehyde"></textarea>
+          <button type="button" class="refine-btn" id="reactant-refine">Refine with AI</button>
+          <div class="refine-result" id="reactant-refine-result"></div>
+        </div>
+        <input type="text" class="secondary-input" id="reactant-id" placeholder="Optional: PubChem fallback name/SMILES, used only if PM6 struggles (not your starting geometry)">
+      </div>
+      <div class="field-separator"><span>Product</span></div>
+      <div class="field" id="field-product">
+        <label><span id="product-label">Product file</span> <span class="format-hint">(.com, .xyz, .mol, .sdf, .pdb, .cdx, .cdxml, .log, auto-converted to a Gaussian input)</span></label>
+        <input type="file" id="product-file" accept=".com,.xyz,.mol,.sdf,.pdb,.cdx,.cdxml,.log">
+        <div class="or-row">or SMILES:
+          <input type="text" id="product-smiles" placeholder="e.g. CC=O">
+          <button type="button" class="load-btn" id="product-smiles-load">Load</button>
+        </div>
+        <div class="file-info" id="product-info"></div>
+        <p class="hint ts-search-warning hidden" id="product-log-warning">Not a .log file, this section doesn't PM6-preopt or reoptimize the reactant/product, so make sure this is already a good/optimized geometry, or the TS search may not find the transition state you're looking for.</p>
+        <div class="describe-row">
+          <label class="describe-label">Optional: describe this compound/reaction (AI-assisted geometry)</label>
+          <textarea id="product-description" rows="2" placeholder="e.g. acetaldehyde, the keto tautomer"></textarea>
+          <button type="button" class="refine-btn" id="product-refine">Refine with AI</button>
+          <div class="refine-result" id="product-refine-result"></div>
+        </div>
+        <input type="text" class="secondary-input" id="product-id" placeholder="Optional: PubChem fallback name/SMILES, used only if PM6 struggles (not your starting geometry)">
+      </div>
+      <div class="field-separator"><span>TS guess</span></div>
+      <details id="field-ts-guess">
+        <summary><span id="ts-guess-summary-text">Optional: TS guess file (auto-generated by interpolation if omitted)</span>, .com, .xyz, .mol, .sdf, .pdb, .cdx, .cdxml, .log</summary>
+        <input type="file" id="ts-guess-file" accept=".com,.xyz,.mol,.sdf,.pdb,.cdx,.cdxml,.log">
+        <div class="or-row">or SMILES:
+          <input type="text" id="ts-guess-smiles" placeholder="e.g. C1CC1">
+          <button type="button" class="load-btn" id="ts-guess-smiles-load">Load</button>
+        </div>
+        <div class="file-info" id="ts-guess-info"></div>
+      </details>
+    </section>
+
+    <section>
+      <h2>3. Job settings</h2>
+      <div class="field">
+        <label>Job name</label>
+        <input type="text" id="job-name" placeholder="my_reaction">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>%nprocshared</label>
+          <input type="number" id="nprocs" value="2" min="1">
+        </div>
+        <div class="field">
+          <label>%mem (GB)</label>
+          <input type="number" id="mem-gb" value="2" min="1">
+        </div>
+      </div>
+      <div class="field">
+        <label>Max repair attempts <span class="format-hint">(non-convergence retries, imaginary-frequency kicks, per optimization)</span></label>
+        <input type="number" id="max-repair-attempts" value="4" min="1">
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="skip-pm6-preopt"> Skip PM6 pre-optimization, start directly at the final level below</label>
+      <div id="ts-recover-row" class="hidden">
+        <label class="checkbox-row" style="margin-top:0.5rem"><input type="checkbox" id="ts-calcall-fallback"> If the usual search can't find the TS, fall back to the more expensive CalcAll (full-Hessian) brute-force route</label>
+        <label class="checkbox-row" style="margin-top:0.5rem"><input type="checkbox" id="ts-recover-endpoints"> Once the TS is found, also try to recover the reactant/product from it (displace along the imaginary mode, reoptimize both sides)</label>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. Level of theory</h2>
+      <div class="field-row">
+        <div class="field">
+          <label>Method</label>
+          <select id="method">
+            <option>HF</option>
+            <option selected>B3LYP</option>
+            <option>M06-2X</option>
+            <option>wB97XD</option>
+            <option>MP2</option>
+            <option value="__custom__">Custom...</option>
+          </select>
+          <input type="text" class="hidden secondary-input" id="method-custom" placeholder="e.g. M062X">
+        </div>
+        <div class="field">
+          <label>Basis set</label>
+          <select id="basis">
+            <option>STO-3G</option>
+            <option>3-21G</option>
+            <option selected>6-31G(d)</option>
+            <option>6-31+G(d,p)</option>
+            <option>6-311G(d,p)</option>
+            <option>6-311+G(d,p)</option>
+            <option>cc-pVDZ</option>
+            <option>cc-pVTZ</option>
+            <option>def2-TZVP</option>
+            <option value="__custom__">Custom...</option>
+            <option value="__genecp__">Mixed basis set (GenECP)...</option>
+          </select>
+          <input type="text" class="hidden secondary-input" id="basis-custom" placeholder="e.g. 6-31G(d)">
+        </div>
+      </div>
+
+      <div id="genecp-panel" class="hidden">
+        <p class="hint">Upload your structure(s) above so their elements show up here. Check which elements need an effective core potential (heavy atoms / transition metals) and name it; everything left unchecked shares one conventional basis.</p>
+        <div id="genecp-elements" class="genecp-elements"></div>
+        <div class="field">
+          <label>Basis set for unchecked elements</label>
+          <input type="text" id="genecp-light-basis" value="6-31G(d,p)">
+        </div>
+      </div>
+    </section>
+
+    <section id="step-irc">
+      <h2>5. IRC verification</h2>
+      <label class="checkbox-row"><input type="checkbox" id="run-irc" checked> Run the IRC to verify the TS connects reactant and product</label>
+      <div class="field" id="irc-points-field">
+        <label>Points per direction</label>
+        <input type="number" id="irc-points" value="25" min="1">
+      </div>
+    </section>
+
+    <section id="step-verification">
+      <h2>5b. Extra reactant/product cross-checks (optional)</h2>
+      <p class="hint">Each of these regenerates the reactant/product independently from the TS and uses whichever version is actually lower in energy for the final report, a third and fourth check beyond IRC/mode-overlap. Each adds 2 more Opt Freq jobs at the final level.</p>
+      <label class="checkbox-row"><input type="checkbox" id="run-ts-distortion"> Cross-check via TS-mode distortion (displace the TS along its imaginary mode, reoptimize both sides)</label>
+      <div class="field" id="distortion-factor-field">
+        <label>Distortion factor (x = x0 &plusmn; factor &times; mode)</label>
+        <input type="number" id="distortion-factor" value="1.0" step="0.1" min="0.1">
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="run-irc-endpoint-reopt" disabled> Also reoptimize the IRC's forward/reverse endpoints to proper minima</label>
+      <p class="hint" id="irc-endpoint-hint" style="margin:0.4rem 0 0">Needs "Run the IRC" checked above.</p>
+      <label class="checkbox-row" style="margin-top:0.6rem"><input type="checkbox" id="recover-missing-endpoint"> If the reactant or product fails to optimize, keep going and try to recover it from the TS afterward</label>
+      <p class="hint" style="margin:0.4rem 0 0">Only works if TS-mode distortion and/or IRC-endpoint reopt above are also enabled, that's what actually regenerates the missing side.</p>
+    </section>
+
+    <section id="step-energy">
+      <h2 id="energy-section-heading">6. Energy report</h2>
+      <div class="field" id="energy-units-field">
+        <label>Units (pick one or more, results are reported in each)</label>
+        <div class="checkbox-group" id="energy-units">
+          <label class="checkbox-row"><input type="checkbox" name="energy-unit" value="kcal/mol" checked> kcal/mol</label>
+          <label class="checkbox-row"><input type="checkbox" name="energy-unit" value="kJ/mol"> kJ/mol</label>
+          <label class="checkbox-row"><input type="checkbox" name="energy-unit" value="eV"> eV</label>
+          <label class="checkbox-row"><input type="checkbox" name="energy-unit" value="Hartree"> Hartree</label>
+        </div>
+      </div>
+      <label class="checkbox-row"><input type="checkbox" id="export-xyz"> Convert the final structure(s) to .xyz files (needs Open Babel)</label>
+      <label class="checkbox-row" style="margin-top:0.5rem"><input type="checkbox" id="export-cdxml"> Convert the final structure(s) to .cdxml (ChemDraw) files (needs Open Babel)</label>
+      <div id="gcorr-block">
+        <label class="checkbox-row" style="margin-top:0.5rem"><input type="checkbox" id="compute-gcorr"> Compute G-corr (thermal correction to Gibbs free energy, via freqchk) for each structure</label>
+        <div class="field-row" id="gcorr-fields" style="margin-top:0.6rem" hidden>
+          <div class="field">
+            <label>Temperature</label>
+            <input type="number" id="gcorr-temperature" value="298.15" step="0.01">
+          </div>
+          <div class="field">
+            <label>Unit</label>
+            <select id="gcorr-temperature-unit">
+              <option value="K" selected>K</option>
+              <option value="C">&deg;C</option>
+              <option value="F">&deg;F</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint" style="margin:0.4rem 0 0">G-corr is calculated independently per structure, no reference subtraction.</p>
+      </div>
+    </section>
+
+    <button type="submit" id="submit-btn">Run study</button>
+    <p class="error" id="form-error"></p>
+    <p class="disclaimer">This tool applies automated, hardcoded algorithms for geometry optimization, TS search, and convergence handling. It cannot fully replace expert judgment. Please review these results yourself for chemical sense and verify them independently before relying on them in official journals, reports, or other formal work.</p>
+  </form>
+
+  <section id="studies-panel" class="hidden panel">
+    <div class="studies-header">
+      <h2>Studies</h2>
+      <button id="add-study-btn" type="button" class="small-btn">+ Start another study</button>
+    </div>
+    <div id="studies-list"></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

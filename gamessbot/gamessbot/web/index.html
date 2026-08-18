@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GamessBot</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1><span class="logo-mark" aria-hidden="true"></span>Gamess<span class="accent-word">Bot</span></h1>
+  <p class="subtitle">RHF &#8594; CIS &#8594; CASSCF &#8594; XMCQDPT, TRANSITN studies with GAMESS</p>
+  <button type="button" id="tips-btn" class="small-btn tips-btn">Tips</button>
+</header>
+
+<div id="tips-panel" class="hidden">
+  <h2>Common mistakes &amp; best practices</h2>
+  <ul>
+    <li>Read the suggested active space's orbital character before accepting it, an orbital sitting right at the SAP coefficient threshold may be a core/Rydberg-like orbital that doesn't belong in the active space, or a genuinely important one that only just cleared the cutoff, either way it's worth a look, not a rubber stamp.</li>
+    <li>If CASSCF doesn't converge at MAXIT=120/200, don't just keep raising MAXIT, a near-degenerate or poorly-chosen active space often won't converge no matter how many iterations you give it. The smaller-active-space-then-regrow recovery (or manually picking a smaller, better-behaved active space first) usually gets further than brute-forcing iterations.</li>
+    <li>State-average over exactly as many states as you actually care about (NSTATE), including extra states you don't need pulls the CASSCF orbitals toward describing states you won't use, which can quietly worsen convergence and accuracy for the ones you do want.</li>
+    <li>Starting a new active-space/state combination from a previous combination's optimized (possibly MO-reordered) orbitals can help convergence when the two active spaces are closely related, but for an unrelated or much larger active space it can just as easily carry over an unhelpful orbital ordering, when in doubt, start fresh from the closed-shell orbitals.</li>
+    <li>XMCQDPT is far more expensive than the CASSCF it builds on, and TRANSITN reruns much of the CASSCF setup again to compute transition moments, only turn these on for the active-space/state combinations you're actually going to report, not every exploratory combination.</li>
+    <li>Bigger active spaces and larger basis sets both grow cost fast (CASSCF scales combinatorially with active orbitals; XMCQDPT/TRANSITN add on top of that), it's usually more productive to first nail down a good, chemically-motivated active space, then move to a larger basis set once you're confident in it, rather than maximizing both at once.</li>
+    <li>Oscillator strengths from TRANSITN are relative to S0 by construction, if you need transitions between two excited states rather than from the ground state, this tool's TRANSITN output won't give you that directly.</li>
+    <li>Right-size the memory (MWORDS) to the active space and basis set, too little causes GAMESS to fail outright on a multireference job; padding it far beyond what's needed just wastes memory without speeding anything up.</li>
+  </ul>
+</div>
+
+<main>
+  <form id="job-form">
+    <section>
+      <div class="section-header-row">
+        <h2>1. Structures</h2>
+        <button type="button" id="pbs-toggle-btn" class="pbs-btn">Enable PBS submission</button>
+      </div>
+      <div class="radio-group">
+        <label><input type="radio" name="geometry_source" value="gaussian_log" checked> Already-optimized Gaussian .log file</label>
+        <label><input type="radio" name="geometry_source" value="gamess_inp"> Existing GAMESS input/punch file (has its own $DATA)</label>
+        <label><input type="radio" name="geometry_source" value="guess"> Guess geometry (SMILES or file), optimized with Gaussian first</label>
+      </div>
+      <div class="pbs-warning hidden" id="pbs-warning">
+        <p class="hint">&#9888; PBS mode is ON for this session, every study submitted from now on is queued via <code>qsub</code> instead of run directly (needs <code>qsub</code>/<code>qstat</code>/<code>qdel</code> on PATH). Click "Edit" below to change the script for your own cluster's paths/resources before running anything for real, keep <code>__JOB__</code> exactly as it appears (in two places); it's automatically replaced with each job's actual name at submission time. Click the PBS button above again to go back to running locally.</p>
+        <div class="pbs-script-header">
+          <label>PBS script (used for every submission this session)</label>
+          <div class="pbs-script-actions">
+            <button type="button" id="pbs-edit-btn" class="pbs-script-btn">&#9998; Edit</button>
+            <button type="button" id="pbs-save-btn" class="pbs-script-btn hidden">&#10003; Save</button>
+          </div>
+        </div>
+        <textarea id="pbs-script-textarea" class="pbs-script-textarea" spellcheck="false" rows="14" readonly></textarea>
+      </div>
+
+      <div class="field" id="field-gaussian-log">
+        <label>Gaussian .log file <span class="format-hint">(already optimized)</span></label>
+        <input type="file" id="gaussian-log-file" accept=".log">
+        <div class="file-info" id="gaussian-log-info"></div>
+      </div>
+
+      <div class="field hidden" id="field-gamess-inp">
+        <label>GAMESS input/punch file</label>
+        <input type="file" id="gamess-inp-file" accept=".inp,.dat">
+        <div class="file-info" id="gamess-inp-info"></div>
+      </div>
+
+      <div class="field hidden" id="field-guess">
+        <label>Geometry file <span class="format-hint">(.xyz, .mol, .sdf, .pdb)</span></label>
+        <input type="file" id="guess-file" accept=".xyz,.mol,.sdf,.pdb">
+        <div class="or-row">or SMILES:
+          <input type="text" id="guess-smiles" placeholder="e.g. O">
+          <button type="button" class="load-btn" id="guess-smiles-load">Load</button>
+        </div>
+        <div class="file-info" id="guess-info"></div>
+        <p class="hint" style="margin-top:0.6rem">This is PM6 pre-optimized, then reoptimized at the final level below (the same two-stage pipeline gaussbot uses) before being handed off to GAMESS, GAMESS needs the final-level minimum, not the cheap PM6 shape.</p>
+        <div class="field-row">
+          <div class="field">
+            <label>Final-level method</label>
+            <select id="gaussian-method"></select>
+          </div>
+          <div class="field">
+            <label>Final-level basis set</label>
+            <select id="gaussian-basis"></select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Gaussian %nprocshared</label>
+            <input type="number" id="nprocs" value="2" min="1">
+          </div>
+          <div class="field">
+            <label>Gaussian %mem (GB)</label>
+            <input type="number" id="mem-gb" value="2" min="1">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Job settings</h2>
+      <div class="field">
+        <label>Job name</label>
+        <input type="text" id="job-name" placeholder="water">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Charge</label>
+          <input type="number" id="charge" value="0">
+        </div>
+        <div class="field">
+          <label>Multiplicity</label>
+          <input type="number" id="mult" value="1" min="1">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Level of theory</h2>
+      <div class="field">
+        <label>Basis set</label>
+        <select id="gbasis"></select>
+        <input type="text" class="hidden secondary-input" id="gbasis-custom" placeholder='e.g. GBASIS=N31 NGAUSS=6 NDFUNC=1'>
+      </div>
+
+      <div class="field-separator"><span>Wavefunction</span></div>
+      <div class="field-row">
+        <div class="field">
+          <label>SCF type</label>
+          <div class="radio-group">
+            <label><input type="radio" name="scf-type" value="rhf" checked> RHF (restricted, closed-shell)</label>
+            <label><input type="radio" name="scf-type" value="uhf" disabled> UHF <span class="format-hint">(coming soon)</span></label>
+            <label><input type="radio" name="scf-type" value="rohf" disabled> ROHF <span class="format-hint">(coming soon)</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <label>RHF convergence</label>
+          <div class="radio-group">
+            <label><input type="radio" name="soscf" value="soscf" checked> SOSCF <span class="format-hint">(default, falls back to DIIS automatically if it doesn't converge)</span></label>
+            <label><input type="radio" name="soscf" value="diis"> DIIS</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. How far to take it</h2>
+      <label class="checkbox-row"><input type="checkbox" id="run-cis"> Run CIS on top of RHF</label>
+      <div class="field hidden" id="nstate-field" style="margin-top:0.6rem">
+        <label>Number of CIS states (NSTATE)</label>
+        <input type="number" id="nstate" value="5" min="1">
+      </div>
+      <label class="checkbox-row" style="margin-top:0.6rem"><input type="checkbox" id="run-casscf"> CASSCF <span class="format-hint">(active space suggested from the CIS excitations above, you'll confirm or adjust it, and can add XMCQDPT on top, before it runs)</span></label>
+      <div class="field hidden" id="casscf-fields" style="margin-top:0.6rem">
+        <div class="field-row">
+          <div class="field">
+            <label>Number of CASSCF states (state-averaged)</label>
+            <input type="number" id="casscf-nstate" value="3" min="1">
+          </div>
+          <div class="field">
+            <label>SAP coefficient threshold</label>
+            <input type="number" id="casscf-threshold" value="0.20" min="0.01" max="1" step="0.01">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. GAMESS settings</h2>
+      <div class="field">
+        <label>Path to rungms</label>
+        <input type="text" id="rungms-path" placeholder="/path/to/gamess/rungms">
+      </div>
+      <div class="field">
+        <label>Scratch directory</label>
+        <input type="text" id="scratch-dir" placeholder="/path/to/scratch">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>CPUs</label>
+          <input type="number" id="ncpus" value="1" min="1">
+        </div>
+        <div class="field">
+          <label>Memory (MWORDS)</label>
+          <input type="number" id="mem-mwords" value="1" min="1">
+        </div>
+      </div>
+    </section>
+
+    <button type="submit" id="submit-btn">Run study</button>
+    <p class="error" id="form-error"></p>
+    <p class="disclaimer">This tool applies automated, hardcoded algorithms for geometry optimization, basis and active-space selection, and convergence handling. It cannot fully replace expert judgment. Please review these results yourself for chemical sense and verify them independently before relying on them in official journals, reports, or other formal work.</p>
+  </form>
+
+  <section id="studies-panel" class="hidden panel">
+    <div class="studies-header">
+      <h2>Studies</h2>
+      <button id="add-study-btn" type="button" class="small-btn">+ Start another study</button>
+    </div>
+    <div id="studies-list"></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

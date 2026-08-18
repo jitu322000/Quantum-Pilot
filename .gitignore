@@ -1,0 +1,30 @@
+# Per-bot virtual environments (created by install.sh)
+gaussbot/venv/
+gamessbot/venv/
+
+# Machine-specific settings (Gaussian env, GAMESS paths, ports) --
+# written by install.sh, holds real local paths, not portable
+gaussbot/.env
+gamessbot/.env
+
+# Job output directories -- real calculation results, not source
+gaussbot/jobs/
+gamessbot/jobs/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# OS/editor cruft
+.DS_Store
+*.swp
+
+# Claude Code local session state (machine/session-specific, not portable) --
+# launch.json (dev server config) is intentionally kept
+**/.claude/settings.local.json
+**/.claude/scheduled_tasks.lock
+
+# Stray corrupted/garbled debris file found in gaussbot/ at publish time
+gaussbot/0*

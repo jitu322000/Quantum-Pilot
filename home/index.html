@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quantum Pilot</title>
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #161b22;
+    --panel-border: #262c36;
+    --text: #e6e9ef;
+    --text-dim: #9aa4b2;
+    --accent: #5b9df9;
+    --accent-dim: #2c4a7c;
+    --gamess-accent: #f9a35b;
+    --gamess-accent-dim: #7c4a2c;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --panel-border: #dde1e7;
+      --text: #1b1f27;
+      --text-dim: #5b6472;
+      --accent: #2f6fe0;
+      --accent-dim: #dbe6fb;
+      --gamess-accent: #d9791f;
+      --gamess-accent-dim: #fbe6d3;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.45;
+    padding: 2rem 1.5rem;
+  }
+  header { text-align: center; margin-bottom: 2.4rem; }
+  h1 {
+    margin: 0;
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .subtitle {
+    margin: 0.6rem 0 0;
+    color: var(--text-dim);
+    font-size: 1.05rem;
+  }
+  .cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: center;
+    max-width: 900px;
+  }
+  .card {
+    display: block;
+    width: 340px;
+    padding: 1.8rem 1.6rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--card-accent, var(--accent));
+  }
+  .card .logo-mark {
+    display: inline-block;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+    background: radial-gradient(circle at 32% 28%, #ffffff88, var(--card-accent, var(--accent)) 60%, transparent 100%);
+    box-shadow: 0 0 14px 1px color-mix(in srgb, var(--card-accent, var(--accent)) 55%, transparent);
+  }
+  .card h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+  }
+  .card .accent-word { color: var(--card-accent, var(--accent)); }
+  .card p {
+    margin: 0 0 1.1rem;
+    color: var(--text-dim);
+    font-size: 0.92rem;
+  }
+  .card .go {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--card-accent, var(--accent));
+  }
+  .card .go svg { transition: transform 0.12s ease; }
+  .card:hover .go svg { transform: translateX(3px); }
+  .gaussbot-card { --card-accent: var(--accent); }
+  .gamessbot-card { --card-accent: var(--gamess-accent); }
+  footer {
+    margin-top: 2.4rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-align: center;
+    max-width: 500px;
+  }
+  footer code {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Quantum Pilot</h1>
+  <p class="subtitle">Let the auto-pilot take over.</p>
+</header>
+
+<div class="cards">
+  <a class="card gaussbot-card" href="http://localhost:8765" id="gaussbot-link">
+    <h2><span class="logo-mark" aria-hidden="true"></span>Gauss<span class="accent-word">Bot</span></h2>
+    <p>From a guess geometry to a verified reaction barrier, automatically, locally, via Gaussian.</p>
+    <span class="go">Open GaussBot
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+    </span>
+  </a>
+
+  <a class="card gamessbot-card" href="http://localhost:8766" id="gamessbot-link">
+    <h2><span class="logo-mark" aria-hidden="true"></span>Gamess<span class="accent-word">Bot</span></h2>
+    <p>RHF &#8594; CIS &#8594; CASSCF &#8594; XMCQDPT, TRANSITN multireference studies with GAMESS.</p>
+    <span class="go">Open GamessBot
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+    </span>
+  </a>
+</div>
+
+<footer id="footer-note">
+  Each card links to that tool's own configured port, if a card looks unresponsive, that
+  bot likely isn't running yet; start it (<code>gaussbot/run_gui.sh</code> or
+  <code>gamessbot/run_gui.sh</code>) first.
+</footer>
+
+<script>
+  // Ports come from each bot's own .env (GAUSSBOT_GUI_PORT/
+  // GAMESSBOT_GUI_PORT), read live by serve.py's /config endpoint --
+  // not hardcoded here, so this stays correct even after changing a
+  // bot's port post-install. Falls back to the defaults already in
+  // the href attributes if /config isn't reachable (e.g. this file
+  // was opened directly via file:// instead of through serve.py).
+  fetch("/config").then((r) => r.json()).then((cfg) => {
+    document.getElementById("gaussbot-link").href = `http://localhost:${cfg.gaussbot_port}`;
+    document.getElementById("gamessbot-link").href = `http://localhost:${cfg.gamessbot_port}`;
+  }).catch(() => {});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gamessbot"
+version = "0.1.0"
+description = "Orchestration layer around GAMESS for RHF/CIS/CASSCF/XMCQDPT multireference studies"
+requires-python = ">=3.9"
+# gaussbot is a sibling local package, not something resolvable from
+# PyPI or a portable absolute file:// URL -- install.sh (or you,
+# manually) installs it into this same environment first
+# (pip install -e ../gaussbot) before installing this package.
+dependencies = [
+    "rdkit",
+    "questionary",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+]
+
+[project.scripts]
+gamessbot = "gamessbot.cli:main"
+gamessbot-gui = "gamessbot.webapp:main"
+
+[tool.setuptools]
+packages = ["gamessbot"]

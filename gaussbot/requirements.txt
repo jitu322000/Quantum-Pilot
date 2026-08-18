@@ -1,0 +1,7 @@
+rdkit
+pubchempy
+questionary
+fastapi
+uvicorn
+python-multipart
+anthropic

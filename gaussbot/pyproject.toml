@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaussbot"
+version = "0.1.0"
+description = "Orchestration layer around Gaussian for reaction mechanism studies"
+requires-python = ">=3.9"
+dependencies = [
+    "rdkit",
+    "pubchempy",
+    "questionary",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "anthropic",
+]
+
+[project.scripts]
+gaussbot = "gaussbot.cli:main"
+gaussbot-gui = "gaussbot.webapp:main"
+
+[tool.setuptools]
+packages = ["gaussbot"]

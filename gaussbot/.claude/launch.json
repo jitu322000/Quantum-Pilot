@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gaussbot-gui",
+      "runtimeExecutable": "/home/srr/BOT/gaussbot/venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "gaussbot.webapp:app", "--host", "127.0.0.1", "--port", "8765"],
+      "port": 8765
+    },
+    {
+      "name": "gamessbot-gui",
+      "runtimeExecutable": "/home/srr/BOT/gamessbot/run_gui.sh",
+      "runtimeArgs": [],
+      "port": 8766
+    }
+  ]
+}

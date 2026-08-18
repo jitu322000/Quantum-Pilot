@@ -1,0 +1,5 @@
+rdkit
+questionary
+fastapi
+uvicorn
+python-multipart
