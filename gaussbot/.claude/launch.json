@@ -12,6 +12,10 @@
       "runtimeExecutable": "/home/srr/BOT/gamessbot/run_gui.sh",
       "runtimeArgs": [],
       "port": 8766
+    },
+    {
+      "name": "theochem-site",
+      "url": "http://127.0.0.1:8801"
     }
   ]
 }
